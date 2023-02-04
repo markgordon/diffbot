@@ -83,7 +83,7 @@
   <exec_depend>diffbot_msgs</exec_depend>
   <exec_depend>rosparam_shortcuts</exec_depend>
   <exec_depend>rosserial</exec_depend>
-
+  <depend>backward_ros</depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>

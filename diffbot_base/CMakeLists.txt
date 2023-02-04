@@ -19,6 +19,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   diffbot_msgs
   rosparam_shortcuts
+  backward_ros
 )
 
 ## System dependencies are found with CMake's conventions

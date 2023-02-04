@@ -82,6 +82,12 @@ namespace diffbot_base
         num_joints_ = joint_names_.size();
         ROS_INFO("Number of joints: %d", (int)num_joints_);
         std::array<std::string, NUM_JOINTS> motor_names = {"left_motor", "right_motor"};
+
+        //create space for storing state
+        last_hw_commands_.resize(num_joints_);
+        current_wheel_position_.resize(num_joints_);
+
+        //register interface variables
         for (unsigned int i = 0; i < num_joints_; i++)
         {
             // Create a JointStateHandle for each joint and register them with the 
