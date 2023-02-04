@@ -49,18 +49,6 @@
                       base_props="${base_props}" > 
   </xacro:wheel>
 
-
-  <!-- Motors -->
-  <xacro:motor prefix="right" reflect="-1" 
-                      motor_props="${motor_props}"
-                      base_props="${base_props}" > 
-  </xacro:motor>
-
-  <xacro:motor prefix="left" reflect="1" 
-                      motor_props="${motor_props}"
-                      base_props="${base_props}" > 
-  </xacro:motor>
-
   <!-- Sensors -->
   <xacro:laser prefix="rplidar" parent_link="base_link"
                    sensor_prop="${sensor_prop}"

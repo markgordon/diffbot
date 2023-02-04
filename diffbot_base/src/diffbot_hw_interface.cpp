@@ -56,23 +56,23 @@ namespace diffbot_base
         ROS_INFO_STREAM("pwm_limit: " << pwm_limit_);
 
         // Setup publisher for the motor driver 
-        pub_left_motor_value_ = nh_.advertise<std_msgs::Int32>("motor_left", 10);
-        pub_right_motor_value_ = nh_.advertise<std_msgs::Int32>("motor_right", 10);
+       // pub_left_motor_value_ = nh_.advertise<std_msgs::Int32>("motor_left", 10);
+       // pub_right_motor_value_ = nh_.advertise<std_msgs::Int32>("motor_right", 10);
 
         //Setup publisher for angular wheel joint velocity commands
-        pub_wheel_cmd_velocities_ = nh_.advertise<diffbot_msgs::WheelsCmdStamped>("wheel_cmd_velocities", 10);
+       // pub_wheel_cmd_velocities_ = nh_.advertise<diffbot_msgs::WheelsCmdStamped>("wheel_cmd_velocities", 10);
 
         // Setup publisher to reset wheel encoders (used during first launch of the hardware interface)
-        pub_reset_encoders_ = nh_.advertise<std_msgs::Empty>("reset", 10);
+       // pub_reset_encoders_ = nh_.advertise<std_msgs::Empty>("reset", 10);
         // Setup subscriber for the wheel encoders
-        sub_encoder_ticks_ = nh_.subscribe("encoder_ticks", 10, &DiffBotHWInterface::encoderTicksCallback, this);
-        sub_measured_joint_states_ = nh_.subscribe("measured_joint_states", 10, &DiffBotHWInterface::measuredJointStatesCallback, this);
+       // sub_encoder_ticks_ = nh_.subscribe("encoder_ticks", 10, &DiffBotHWInterface::encoderTicksCallback, this);
+       // sub_measured_joint_states_ = nh_.subscribe("measured_joint_states", 10, &DiffBotHWInterface::measuredJointStatesCallback, this);
 
         // Initialize the hardware interface
         init(nh_, nh_);
 
         // Wait for encoder messages being published
-        isReceivingMeasuredJointStates(ros::Duration(10));
+       // isReceivingMeasuredJointStates(ros::Duration(10));
     }
 
  
@@ -116,8 +116,8 @@ namespace diffbot_base
             ROS_INFO_STREAM("pid namespace: " << pid_namespace);
             ros::NodeHandle nh(root_nh, pid_namespace);
             // TODO implement builder pattern to initialize values otherwise it is hard to see which parameter is what.
-            pids_[i].init(nh, 0.8, 0.35, 0.5, 0.01, 3.5, -3.5, false, max_velocity_, -max_velocity_);
-            pids_[i].setOutputLimits(-max_velocity_, max_velocity_);
+            //pids_[i].init(nh, 0.8, 0.35, 0.5, 0.01, 3.5, -3.5, false, max_velocity_, -max_velocity_);
+            //pids_[i].setOutputLimits(-max_velocity_, max_velocity_);
         }
 
         // Register the JointStateInterface containing the read only joints
@@ -127,138 +127,89 @@ namespace diffbot_base
         // Register the JointVelocityInterface containing the read/write joints
         // with this robot's hardware_interface::RobotHW.
         registerInterface(&velocity_joint_interface_);
+    ROS_INFO("open port");
 
+    std::string port1 = "/dev/serial/by-id/usb-1a86_USB_Single_Serial_54D2035530-if00";
+    ddms_diff::return_type ret = wheel_command[0].open(port1);
+    if(ret != ddms_diff::return_type::SUCCESS)
+    {
+        ROS_FATAL("DDSM Couldn't open port %s, code %i",port1.c_str(),(int)ret);
+        return false;
+    }
+  
+    std::string port2 = "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A9XOMIL6-if00-port0";
+    ret = wheel_command[1].open(port2);
+
+    if(ret != ddms_diff::return_type::SUCCESS)
+    {
+        ROS_FATAL("DDSM Couldn't open port %s, code %i",port2.c_str(),(int)ret);
+        return false;
+    }
         ROS_INFO("... Done Initializing DiffBot Hardware Interface");
+
+
+
 
         return true;
     }
 
-    void DiffBotHWInterface::read(const ros::Time& time, const ros::Duration& period)
+    void DiffBotHWInterface::read(const ros::Time& /*time*/, const ros::Duration& /*period*/)
     {
-        //ROS_INFO_THROTTLE(1, "Read");
-        ros::Duration elapsed_time = period;
 
-        // Read from robot hw (motor encoders)
-        // Fill joint_state_* members with read values
-        for (std::size_t i = 0; i < num_joints_; ++i)
-        {
-            joint_positions_[i] = measured_joint_states_[i].angular_position_;
-            joint_velocities_[i] = measured_joint_states_[i].angular_velocity_;
-            joint_efforts_[i] = 0.0; // unused with diff_drive_controller
+        for(int i=0;i<num_joints_;i++){
+            std::vector<double> state;
+            //re-use last rpm, since we have to update to get detailed info
+            ddms_diff::return_type retval = wheel_command[i].get_wheel_state(i+1,last_hw_commands_[i],state);
+            if(retval != ddms_diff::return_type::SUCCESS){
+                ROS_FATAL("DDSM Read joint fail");
+                return;
+            }
+            //states may be empty if there was a non-fatal read error
+            if(state.size() > 1){
+            //if this is first measurement the wheels are at starting position
+            if(last_angle_[i] == -1)last_angle_[i] = round(state[1]*1000)/1000.0;
+            else{
+                if(round(state[0]) !=0){
+                    //create absolute encoder from relative
+                    state[1] = round(state[1]*1000)/1000.0;
+                    double delta=state[1] - last_angle_[i];
+                    //rotating backwards over last interval
+                    if(state[0] < 0){
+                    if (last_angle_[i] - state[1] < -M_PI){
+                        delta = -(2*M_PI - state[1] + last_angle_[i]);
+                    }
+                    }else if(state[0] > 0){
+                    if (last_angle_[i] - state[1] > M_PI){
+                        delta = round((2*M_PI - last_angle_[i] + state[1])*1000)/1000.0;
+                    }
+                    }
+                // RCLCPP_INFO(rclcpp::get_logger("DiffBotSystemHardware"), "id %d last %f :current %f sp %f",i,last_angle_[i] ,state[1],state[0],delta);
+
+                    current_wheel_position_[i]+=delta;
+                }
+                last_angle_[i] = state[1];
+
+            }
+            //RCLCPP_INFO(rclcpp::get_logger("DiffBotSystemHardware"), "pos %f",current_wheel_position_[i]);
+
+            joint_velocities_[i] = state[0];
+            joint_positions_[i]  = current_wheel_position_[i];
+            joint_efforts_[i] = 0.0;
+            //last_state_[i][0] = state[0];
+            //last_state_[i][1] = state[1];
+            }else{
+                joint_positions_[i] = current_wheel_position_[i];
+            }
         }
 
-        if (debug_)
-        {
-            const int width = 10;
-            const char sep = ' ';
-            std::stringstream ss;
-            ss << std::left << std::setw(width) << std::setfill(sep) << "Read" << std::left << std::setw(width) << std::setfill(sep) << "ticks" << std::left << std::setw(width) << std::setfill(sep) << "angle" << std::left << std::setw(width) << std::setfill(sep) << "velocity" << std::endl;
-            ss << std::left << std::setw(width) << std::setfill(sep) << "j0:" << std::left << std::setw(width) << std::setfill(sep) << encoder_ticks_[0] << std::left << std::setw(width) << std::setfill(sep) << joint_positions_[0] << std::left << std::setw(width) << std::setfill(sep) << joint_velocities_[0] << std::endl;
-            ss << std::left << std::setw(width) << std::setfill(sep) << "j1:" << std::left << std::setw(width) << std::setfill(sep) << encoder_ticks_[1] << std::left << std::setw(width) << std::setfill(sep) << joint_positions_[1] << std::left << std::setw(width) << std::setfill(sep) << std::setfill(sep) << joint_velocities_[1];
-            ROS_INFO_STREAM(std::endl << ss.str());
-            //printState();
-        }
     }
 
-    void DiffBotHWInterface::write(const ros::Time& time, const ros::Duration& period)
+    void DiffBotHWInterface::write(const ros::Time& time, const ros::Duration& /*period*/)
     {
-        ros::Duration elapsed_time = period;
-        // Write to robot hw
-        // joint velocity commands from ros_control's RobotHW are in rad/s
-
-        // adjusting k by gain and trim
-        double motor_constant_right_inv = (gain_ + trim_) / motor_constant_;
-        double motor_constant_left_inv = (gain_ - trim_) / motor_constant_;
-
-
-        joint_velocity_commands_[0] = joint_velocity_commands_[0] * motor_constant_left_inv;
-        joint_velocity_commands_[1] = joint_velocity_commands_[1] * motor_constant_right_inv;
-
-
-        // Publish the desired (commanded) angular wheel joint velocities
-        diffbot_msgs::WheelsCmdStamped wheel_cmd_msg;
-        wheel_cmd_msg.header.stamp = ros::Time::now();
-        for (int i = 0; i < NUM_JOINTS; ++i)
-        {
-            wheel_cmd_msg.wheels_cmd.angular_velocities.joint.push_back(joint_velocity_commands_[i]);
+        for(int i = 0;i<num_joints_;i++){
+            last_hw_commands_[i] = joint_velocity_commands_[0];
         }
 
-        pub_wheel_cmd_velocities_.publish(wheel_cmd_msg);
-
-        // The following code provides another velocity commands interface
-        // With it a motor driver node can directly subscribe to the desired velocities.
-
-        // Convert the velocity command to a percentage value for the motor
-        // This maps the velocity to a percentage value which is used to apply
-        // a percentage of the highest possible battery voltage to each motor.
-        std_msgs::Int32 left_motor;
-        std_msgs::Int32 right_motor;
-
-        double pid_outputs[NUM_JOINTS];
-        double motor_cmds[NUM_JOINTS] ;
-        pid_outputs[0] = pids_[0](joint_velocities_[0], joint_velocity_commands_[0], period);
-        pid_outputs[1] = pids_[1](joint_velocities_[1], joint_velocity_commands_[1], period);
-
-        motor_cmds[0] = pid_outputs[0] / max_velocity_ * 100.0;
-        motor_cmds[1] = pid_outputs[1] / max_velocity_ * 100.0;
-        left_motor.data = motor_cmds[0];
-        right_motor.data = motor_cmds[1];
-
-        // Calibrate motor commands to deal with different gear friction in the
-        // left and right motors and possible differences in the wheels.
-        // Add calibration offsets to motor output in low regions
-        // To tune these offset values command the robot to drive in a straight line and
-        // adjust if it isn't going straight.
-        // int left_offset = 10;
-        // int right_offset = 5;
-        // int threshold = 55;
-        // if (0 < left_motor.data && left_motor.data < threshold)
-        // {
-        //     // the second part of the multiplication lets the offset decrease with growing motor values
-        //     left_motor.data += left_offset * (threshold - left_motor.data) / threshold;
-        // }
-        // if (0 < right_motor.data && right_motor.data < threshold)
-        // {
-        //     // the second part of the multiplication lets the offset decrease with growing motor values
-        //     right_motor.data += right_offset * (threshold - right_motor.data) / threshold;
-        // }
-
-        pub_left_motor_value_.publish(left_motor);
-        pub_right_motor_value_.publish(right_motor);
-
-
-        if (debug_)
-        {
-            const int width = 10;
-            const char sep = ' ';
-            std::stringstream ss;
-            // Header
-            ss << std::left << std::setw(width) << std::setfill(sep) << "Write"
-            << std::left << std::setw(width) << std::setfill(sep) << "velocity"
-            << std::left << std::setw(width) << std::setfill(sep) << "p_error"
-            << std::left << std::setw(width) << std::setfill(sep) << "i_error"
-            << std::left << std::setw(width) << std::setfill(sep) << "d_error"
-            << std::left << std::setw(width) << std::setfill(sep) << "pid out"
-            << std::left << std::setw(width) << std::setfill(sep) << "percent"
-            << std::endl;
-            double p_error, i_error, d_error;
-            for (int i = 0; i < NUM_JOINTS; ++i)
-            {
-                pids_[i].getCurrentPIDErrors(&p_error, &i_error, &d_error);
-
-                // Joint i
-                std::string j = "j" + std::to_string(i) + ":";
-                ss << std::left << std::setw(width) << std::setfill(sep) << j
-                << std::left << std::setw(width) << std::setfill(sep) << joint_velocity_commands_[i]
-                << std::left << std::setw(width) << std::setfill(sep) << p_error
-                << std::left << std::setw(width) << std::setfill(sep) << i_error
-                << std::left << std::setw(width) << std::setfill(sep) << d_error
-                << std::left << std::setw(width) << std::setfill(sep) << pid_outputs[i]
-                << std::left << std::setw(width) << std::setfill(sep) << motor_cmds[i]
-                << std::endl;
-            }
-            ROS_INFO_STREAM(std::endl << ss.str());
-        }
     }
 
     bool DiffBotHWInterface::isReceivingMeasuredJointStates(const ros::Duration &timeout)
@@ -353,37 +304,6 @@ namespace diffbot_base
         return ss.str();
     }
 
-
-    /// Process updates from encoders
-    void DiffBotHWInterface::encoderTicksCallback(const diffbot_msgs::EncodersStamped::ConstPtr& msg_encoder)
-    {
-        /// Update current encoder ticks in encoders array
-        encoder_ticks_[0] = msg_encoder->encoders.ticks[0];
-        encoder_ticks_[1] = msg_encoder->encoders.ticks[1];
-        ROS_DEBUG_STREAM_THROTTLE(1, "Left encoder ticks: " << encoder_ticks_[0]);
-        ROS_DEBUG_STREAM_THROTTLE(1, "Right encoder ticks: " << encoder_ticks_[1]);
-    }
-
-    void DiffBotHWInterface::measuredJointStatesCallback(const sensor_msgs::JointState::ConstPtr& msg_joint_states)
-    {
-        /// Update current encoder ticks in encoders array
-        for (std::size_t i = 0; i < num_joints_; ++i)
-        {
-            measured_joint_states_[i].angular_position_ = msg_joint_states->position[i];
-            measured_joint_states_[i].angular_velocity_ = msg_joint_states->velocity[i];
-        }
-        //ROS_DEBUG_STREAM_THROTTLE(1, "Left encoder ticks: " << encoder_ticks_[0]);
-        //ROS_DEBUG_STREAM_THROTTLE(1, "Right encoder ticks: " << encoder_ticks_[1]);
-    }
-
-
-    double DiffBotHWInterface::ticksToAngle(const int &ticks) const
-    {
-        // Convert number of encoder ticks to angle in radians
-        double angle = (double)ticks * (2.0*M_PI / encoder_resolution_);
-        ROS_DEBUG_STREAM_THROTTLE(1, ticks << " ticks correspond to an angle of " << angle);
-	    return angle;
-    }
 
     double DiffBotHWInterface::normalizeAngle(double &angle) const
     {

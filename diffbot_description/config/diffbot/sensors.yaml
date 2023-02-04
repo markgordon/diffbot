@@ -4,9 +4,9 @@ laser:
   length: 0.01      # Wheel length in m, considering is as a cylinder
   mesh: 'rplidar-a2.stl'  # Name of the mesh files. Leave it empty ('') to have a red wheel
   #mesh: ''
-  dx: 0.0
+  dx: -0.136
   dy: 0.0
-  dz: 0.04
+  dz: 0.083
   angular_range:
     min: -3.1415
     max: 3.1415

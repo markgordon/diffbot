@@ -5,17 +5,15 @@
 // ROS
 #include <ros/ros.h>
 #include <urdf/model.h>
-#include <diffbot_msgs/EncodersStamped.h>
-#include <diffbot_msgs/WheelsCmdStamped.h>
-#include <diffbot_msgs/AngularVelocitiesStamped.h>
 #include <sensor_msgs/JointState.h>
 
 // ROS Controls
 #include <hardware_interface/robot_hw.h>
 #include <hardware_interface/joint_state_interface.h>
 #include <hardware_interface/joint_command_interface.h>
+#include "ddms_serial_port.hpp" //implements ddms wheel serial port control (rs485 bus with 2 ids)
 
-#include <diffbot_base/pid.h>
+//#include <diffbot_base/pid.h>
 
 
 namespace diffbot_base
@@ -121,19 +119,17 @@ namespace diffbot_base
         /** \brief Get the URDF XML from the parameter server */
         virtual void loadURDF(const ros::NodeHandle& nh, std::string param_name);
 
-        /** \brief Callback to receive the encoder ticks from Teensy MCU */
-        void encoderTicksCallback(const diffbot_msgs::EncodersStamped::ConstPtr& msg_encoders);
-
-        /** \brief Callback to receive the measured joint states from Teensy MCU */
-        void measuredJointStatesCallback(const sensor_msgs::JointState::ConstPtr& msg_joint_states);
-
         /** \brief Convert number of encoder ticks to angle in radians */
-        double ticksToAngle(const int &ticks) const;
 
         /** \brief Normalize angle in the range of [0, 360) */
         double normalizeAngle(double &angle) const;
-
-
+        /** \brief store the state of the wheels */
+        std::vector<double> last_hw_commands_;
+        std::vector<double> current_wheel_position_;
+        double last_angle_[2] = {-1,-1};
+        /** \brief serial interface to DDSM15 wheel  */
+        ddms_diff::DDMSSerial wheel_command[2]; 
+        //interface to send and receive data from wheels
         // The following functions are currently unused
         // DiffBot directly calculates normalized angles from encoder ticks
         // The joint_commands from ros_control are mapped to percentage values for the motor driver
@@ -226,7 +222,7 @@ namespace diffbot_base
         int encoder_ticks_[NUM_JOINTS];
         JointState measured_joint_states_[NUM_JOINTS];
 
-        PID pids_[NUM_JOINTS];
+        //PID pids_[NUM_JOINTS];
     };  // class DiffBotHWInterface
 
 }  // namespace

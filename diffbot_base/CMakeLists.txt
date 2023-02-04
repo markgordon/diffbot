@@ -131,6 +131,7 @@ include_directories(
 ## Declare DiffBot Hardware Interface library
 add_library(diffbot_hw_interface
   src/diffbot_hw_interface.cpp
+  src/ddms_serial_port.cpp
   src/pid.cpp
 )
 
