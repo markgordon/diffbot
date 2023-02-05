@@ -132,25 +132,28 @@ namespace diffbot_base
         // Register the JointVelocityInterface containing the read/write joints
         // with this robot's hardware_interface::RobotHW.
         registerInterface(&velocity_joint_interface_);
-    ROS_INFO("open port");
+        ROS_INFO("open ports ...");
 
-    std::string port1 = "/dev/serial/by-id/usb-1a86_USB_Single_Serial_54D2035530-if00";
-    ddms_diff::return_type ret = wheel_command[0].open(port1);
-    if(ret != ddms_diff::return_type::SUCCESS)
-    {
-        ROS_FATAL("DDSM Couldn't open port %s, code %i",port1.c_str(),(int)ret);
-        return false;
-    }
-  
-    std::string port2 = "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A9XOMIL6-if00-port0";
-    ret = wheel_command[1].open(port2);
+        std::string port1 = "/dev/serial/by-id/usb-1a86_USB_Single_Serial_54D2035530-if00";
+        int ID = wheel_command[0].open(port1);
+        if(ID == -1)
+        {
+            ROS_FATAL("DDSM Couldn't open port %s, code %i",port1.c_str(),ID);
+            return false;
+        }else{
+            ROS_INFO("Wheel %i Connected to %s",ID,port1.c_str());
+        }
+    
+        std::string port2 = "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A9XOMIL6-if00-port0";
+        ID = wheel_command[1].open(port2);
 
-    if(ret != ddms_diff::return_type::SUCCESS)
-    {
-        ROS_FATAL("DDSM Couldn't open port %s, code %i",port2.c_str(),(int)ret);
-        return false;
-    }
-        ROS_INFO("... Done Initializing DiffBot Hardware Interface");
+        if(ID == -1)
+        {
+            ROS_FATAL("DDSM Couldn't open port %s, code %i",port2.c_str(),ID);
+            return false;
+        }else{
+            ROS_INFO("Wheel %i Connected to %s",ID,port2.c_str());
+        }
         return true;
     }
 
@@ -185,7 +188,7 @@ namespace diffbot_base
                             delta = round((2*M_PI - last_angle_[i] + state[1])*1000)/1000.0;
                         }
                         }
-                        //ROS_INFO("id %d last %f :current %f sp %f",i,last_angle_[i] ,state[1],state[0]);
+                        ROS_INFO("id %d last %f :current %f sp %f",i,last_angle_[i] ,state[1],state[0]);
 
                         current_wheel_position_[i]+=delta;
                     //}

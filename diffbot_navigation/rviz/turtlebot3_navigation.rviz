@@ -97,7 +97,7 @@ Visualization Manager:
           Show Trail: false
           Value: true
       Name: RobotModel
-      Robot Description: robot_description
+      Robot Description: diffbot_description
       TF Prefix: ""
       Update Interval: 0
       Value: true
@@ -141,7 +141,7 @@ Visualization Manager:
       Size (Pixels): 3
       Size (m): 0.0300000012
       Style: Flat Squares
-      Topic: /scan
+      Topic: /diffbot/scan
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true

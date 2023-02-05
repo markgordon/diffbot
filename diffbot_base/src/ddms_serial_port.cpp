@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include <sys/ioctl.h> 
 #include <linux/serial.h>
-
+#include <chrono>
 #include <diffbot_base/ddms_serial_port.hpp>
 
 using namespace ddms_diff;
@@ -26,13 +26,13 @@ DDMSSerial::~DDMSSerial()
     close();
 }
 
-ddms_diff::return_type DDMSSerial::open(const std::string & port_name)
+int DDMSSerial::open(const std::string & port_name)
 {
     serial_port_ = ::open(port_name.c_str(), O_RDWR | O_NOCTTY);
 
     if (serial_port_ < 0) {
         fprintf(stderr, "Failed to open serial port: %s (%d)\n", strerror(errno), errno);
-        return return_type::ERROR;
+        return -1;
     }
     //make it exclusive
     ioctl(serial_port_, TIOCEXCL);
@@ -45,7 +45,7 @@ ddms_diff::return_type DDMSSerial::open(const std::string & port_name)
     if (::tcgetattr(serial_port_, &tty_config) != 0) {
         fprintf(stderr, "Failed to get serial port configuration: %s (%d)\n", strerror(errno), errno);
         close();
-        return return_type::ERROR;
+        -1;
     }
 
     memset(&tty_config, 0, sizeof(termios));
@@ -64,10 +64,27 @@ ddms_diff::return_type DDMSSerial::open(const std::string & port_name)
     if (::tcsetattr(serial_port_, TCSANOW, &tty_config) != 0) {
         fprintf(stderr, "Failed to set serial port configuration: %s (%d)\n", strerror(errno), errno);
         close();
-        return return_type::ERROR;
+        return -1;
     }
-
-    return return_type::SUCCESS;
+    /** read motor IDS to make sure we know what we are doing*/
+    interrogate_motor int_mot;
+    uint8_t ID;
+    sleep(1);
+    ROS_INFO("req ID");
+    for (int i=0;i<5;i++){
+        write_frame((uint8_t *)& int_mot);
+        usleep(5000);
+    }
+    if(write_frame((uint8_t *)& int_mot)== return_type::SUCCESS){
+        usleep(5000);
+        uint8_t frame[10];
+        ROS_INFO("read ID");
+        if(read_frame(frame)!=return_type::SUCCESS) return -1;
+        //motor_state reply
+        ID = frame[0];
+    }
+    
+    return (int)ID;
 }
 
 ddms_diff::return_type DDMSSerial::close()
@@ -87,21 +104,32 @@ ddms_diff::return_type DDMSSerial::get_wheel_state(uint8_t ID,double velocity,st
     if(retval == return_type::SUCCESS){
         command_motor_reply reply;
         if((retval = read_frame((uint8_t * )(&reply))) == return_type::SUCCESS){
-            //rotation only goes to 32767, no negatives so conversion isn't an issue, just convert to radians
-            //veclocities are +/- so some ugliness
-            int16_t velocity = (reply.velocity[0]<<8) | reply.velocity[1];            
-            if(ID==2){
-                states.push_back(-velocity);
-                //the opposite rotation
-                states.push_back((((reply.position[0] << 8) + reply.position[1])/(double)32767 )* 2* M_PI);
+            if(reply.ID < 3 && reply.Mode == 2){
+                //rotation only goes to 32767, no negatives so conversion isn't an issue, just convert to radians
+                //veclocities are +/- so some ugliness
+                int16_t velocity = (reply.velocity[0]<<8) | reply.velocity[1];            
+                if(ID==2){
+                    states.push_back(-velocity);
+                    //the opposite rotation
+                    states.push_back((((reply.position[0] << 8) + reply.position[1])/(double)32767 )* 2* M_PI);
 
-            }else{
-                states.push_back(velocity);
-                int pos = 32767 - ((uint32_t)(reply.position[0] << 8) + reply.position[1]);
-                states.push_back((pos/(double)32767 )* 2* M_PI);
+                }else{
+                    states.push_back(velocity);
+                    int pos = 32767 - ((uint32_t)(reply.position[0] << 8) + reply.position[1]);
+                    states.push_back((pos/(double)32767 )* 2* M_PI);
+                }
+            }else {
+                //flush any bytes, bad read
+                tcflush(serial_port_, TCIFLUSH);
+
+                //this is an error on read, but we can ignore as next read will recover
+                return ddms_diff::return_type::SUCCESS;
             }
         }else{
             if(retval == return_type::NON_FATAL_READ_ERROR) {
+                //flush any bytes, bad read
+                tcflush(serial_port_, TCIFLUSH);
+
                 return ddms_diff::return_type::SUCCESS;
             }
             ROS_FATAL( "DDSM Serial Failed to read state ID:%i, error %i",ID,(uint)retval);
@@ -143,7 +171,7 @@ return_type DDMSSerial::read_frame(uint8_t * frame)
       // as far as possible to tell.
         if(num_bytes == 9){
             //so if we wait just a few milliseconds the next call won't fail.......
-            if(tries > 1 || frame[0] > 2)
+            if(tries > 9 || frame[0] > 2)
             {
                 uint time =   std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock().now().time_since_epoch() - start).count();
                // RCLCPP_INFO(rclcpp::get_logger("DDMSSerialPort"),"fail time %d, %d, %d",time, tries,frame[0]);
@@ -156,9 +184,9 @@ return_type DDMSSerial::read_frame(uint8_t * frame)
                 return return_type::ERROR;
             }
         }
-    }while(retval > -1 && num_bytes < 10 );
-                //ROS_INFO("answer %02x%02x%02x%02x%02x%02x%02x%02x%02x %02x",
-                //frame[0],frame[1],frame[2],frame[3],frame[4],frame[5],frame[6],frame[7],frame[8], frame[9]);
+    }while(retval > -1 && num_bytes < 10 && tries <11);
+                ROS_INFO("answer %02x%02x%02x%02x%02x%02x%02x%02x%02x %02x, bytes %d, tries %d",
+                frame[0],frame[1],frame[2],frame[3],frame[4],frame[5],frame[6],frame[7],frame[8], frame[9],num_bytes,tries);
     if (retval == -1 ) {
         ROS_FATAL("DDSM Failed to read serial port data: %s (%d)\n", strerror(errno), errno);
         return return_type::ERROR;

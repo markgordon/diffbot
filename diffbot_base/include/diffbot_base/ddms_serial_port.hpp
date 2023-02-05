@@ -28,11 +28,14 @@ namespace ddms_diff
     public:
         DDMSSerial();
         ~DDMSSerial();
-        
-        return_type open(const std::string & port_name);
+        /** returns the DDSM ID of the wheel or fail (-1)*/
+        int open(const std::string & port_name);
         return_type close();
+        /** command to value velocity*/
         return_type motor_command(uint8_t ID, double commanded_value);
+        /** gets detailed information on state of wheel with id of ID, also command velocity to velocity */
         ddms_diff::return_type get_wheel_state(uint8_t ID,double velocity,std::vector<double> & current_wheel_state);
+        /** change mode, untested*/
         return_type set_motor_control(uint8_t ID, Mode mode);
         bool is_open() const;
 

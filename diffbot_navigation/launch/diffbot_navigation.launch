@@ -26,9 +26,4 @@
     <arg name="move_forward_only" value="$(arg move_forward_only)"/>
   </include>
 
-  <!-- rviz -->
-  <group if="$(arg open_rviz)"> 
-    <node pkg="rviz" type="rviz" name="rviz" required="true"
-          args="-d $(find rtabmap_ros)/launch/config/turtlebot_navigation.rviz"/>
-  </group>
 </launch>
