@@ -29,6 +29,6 @@
   <!-- rviz -->
   <group if="$(arg open_rviz)"> 
     <node pkg="rviz" type="rviz" name="rviz" required="true"
-          args="-d $(find diffbot_navigation)/rviz/$(arg model)_navigation.rviz"/>
+          args="-d $(find rtabmap_ros)/launch/config/turtlebot_navigation.rviz"/>
   </group>
 </launch>

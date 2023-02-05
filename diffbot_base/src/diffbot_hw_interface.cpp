@@ -86,7 +86,6 @@ namespace diffbot_base
         //create space for storing state
         last_hw_commands_.resize(num_joints_);
         current_wheel_position_.resize(num_joints_);
-
         //register interface variables
         for (unsigned int i = 0; i < num_joints_; i++)
         {
@@ -152,15 +151,12 @@ namespace diffbot_base
         return false;
     }
         ROS_INFO("... Done Initializing DiffBot Hardware Interface");
-
-
-
-
         return true;
     }
 
     void DiffBotHWInterface::read(const ros::Time& /*time*/, const ros::Duration& /*period*/)
     {
+
 
         for(int i=0;i<num_joints_;i++){
             std::vector<double> state;
@@ -172,40 +168,41 @@ namespace diffbot_base
             }
             //states may be empty if there was a non-fatal read error
             if(state.size() > 1){
-            //if this is first measurement the wheels are at starting position
-            if(last_angle_[i] == -1)last_angle_[i] = round(state[1]*1000)/1000.0;
-            else{
-                if(round(state[0]) !=0){
-                    //create absolute encoder from relative
-                    state[1] = round(state[1]*1000)/1000.0;
-                    double delta=state[1] - last_angle_[i];
-                    //rotating backwards over last interval
-                    if(state[0] < 0){
-                    if (last_angle_[i] - state[1] < -M_PI){
-                        delta = -(2*M_PI - state[1] + last_angle_[i]);
-                    }
-                    }else if(state[0] > 0){
-                    if (last_angle_[i] - state[1] > M_PI){
-                        delta = round((2*M_PI - last_angle_[i] + state[1])*1000)/1000.0;
-                    }
-                    }
-                // RCLCPP_INFO(rclcpp::get_logger("DiffBotSystemHardware"), "id %d last %f :current %f sp %f",i,last_angle_[i] ,state[1],state[0],delta);
+                //if this is first measurement the wheels are at starting position
+                if(last_angle_[i] == -1)last_angle_[i] = round(state[1]*1000)/1000.0;
+                else{
+                    //if(round(state[0]) !=0){
+                        //create absolute encoder from relative
+                        state[1] = round(state[1]*1000)/1000.0;
+                        double delta=state[1] - last_angle_[i];
+                        //rotating backwards over last interval
+                        if(state[0] < 0){
+                        if (last_angle_[i] - state[1] < -M_PI){
+                            delta = -(2*M_PI - state[1] + last_angle_[i]);
+                        }
+                        }else if(state[0] > 0){
+                        if (last_angle_[i] - state[1] > M_PI){
+                            delta = round((2*M_PI - last_angle_[i] + state[1])*1000)/1000.0;
+                        }
+                        }
+                        //ROS_INFO("id %d last %f :current %f sp %f",i,last_angle_[i] ,state[1],state[0]);
 
-                    current_wheel_position_[i]+=delta;
+                        current_wheel_position_[i]+=delta;
+                    //}
+                    last_angle_[i] = state[1];
+
                 }
-                last_angle_[i] = state[1];
+                //RCLCPP_INFO(rclcpp::get_logger("DiffBotSystemHardware"), "pos %f",current_wheel_position_[i]);
 
-            }
-            //RCLCPP_INFO(rclcpp::get_logger("DiffBotSystemHardware"), "pos %f",current_wheel_position_[i]);
-
-            joint_velocities_[i] = state[0];
-            joint_positions_[i]  = current_wheel_position_[i];
-            joint_efforts_[i] = 0.0;
-            //last_state_[i][0] = state[0];
-            //last_state_[i][1] = state[1];
+                joint_velocities_[i] = state[0];
+                joint_positions_[i]  = current_wheel_position_[i];
+                joint_efforts_[i] = 0.0;
+                //last_state_[i][0] = state[0];
+                //last_state_[i][1] = state[1];
             }else{
                 joint_positions_[i] = current_wheel_position_[i];
             }
+
         }
 
     }
@@ -213,7 +210,7 @@ namespace diffbot_base
     void DiffBotHWInterface::write(const ros::Time& time, const ros::Duration& /*period*/)
     {
         for(int i = 0;i<num_joints_;i++){
-            last_hw_commands_[i] = joint_velocity_commands_[0];
+            last_hw_commands_[i] = joint_velocity_commands_[i];
         }
 
     }
