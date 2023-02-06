@@ -185,8 +185,8 @@ return_type DDMSSerial::read_frame(uint8_t * frame)
             }
         }
     }while(retval > -1 && num_bytes < 10 && tries <11);
-                ROS_INFO("answer %02x%02x%02x%02x%02x%02x%02x%02x%02x %02x, bytes %d, tries %d",
-                frame[0],frame[1],frame[2],frame[3],frame[4],frame[5],frame[6],frame[7],frame[8], frame[9],num_bytes,tries);
+                //ROS_INFO("answer %02x%02x%02x%02x%02x%02x%02x%02x%02x %02x, bytes %d, tries %d",
+                //frame[0],frame[1],frame[2],frame[3],frame[4],frame[5],frame[6],frame[7],frame[8], frame[9],num_bytes,tries);
     if (retval == -1 ) {
         ROS_FATAL("DDSM Failed to read serial port data: %s (%d)\n", strerror(errno), errno);
         return return_type::ERROR;

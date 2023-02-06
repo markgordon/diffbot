@@ -1,7 +1,7 @@
 <launch>
   <!-- Arguments -->
   <arg name="model" default="diffbot" doc="model type [diffbot, remo]"/>
-  <arg name="map_file" default="$(find diffbot_navigation)/maps/map.yaml"/>
+  <arg name="map_file" default="/home/mg/mymap.yaml"/>
   <arg name="open_rviz" default="true"/>
   <arg name="move_forward_only" default="false"/>
   <arg name="local_planner" default="dwa" doc="Local planner can be either dwa, base, teb or pose"/>
@@ -25,5 +25,8 @@
     <arg name="local_planner" value="$(arg local_planner)" />
     <arg name="move_forward_only" value="$(arg move_forward_only)"/>
   </include>
-
+  <group if="$(arg open_rviz)"> 
+    <node pkg="rviz" type="rviz" name="rviz" required="true"
+          args="-d $(find diffbot_navigation)/rviz/$(arg model)_navigation.rviz"/>
+  </group>
 </launch>

@@ -188,7 +188,7 @@ namespace diffbot_base
                             delta = round((2*M_PI - last_angle_[i] + state[1])*1000)/1000.0;
                         }
                         }
-                        ROS_INFO("id %d last %f :current %f sp %f",i,last_angle_[i] ,state[1],state[0]);
+                        //ROS_INFO("id %d last %f :current %f sp %f",i,last_angle_[i] ,state[1],state[0]);
 
                         current_wheel_position_[i]+=delta;
                     //}
